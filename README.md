@@ -207,10 +207,13 @@ Each step in this lab **must have its own issue**.
 | STEP 9   | `[STEP 9] Add integration tests`                    |
 | STEP 10  | `[STEP 10] Dockerize the agent`                     |
 | STEP 11  | `[STEP 11] Setup CI/CD with GitHub Actions`         |
-| STEP 12  | `[STEP 12] Add Kubernetes manifests (Minikube)`     |
 
 ---
+## 📄 Standard Issue Template (MANDATORY)
 
+Each STEP issue **must follow this template**:
+
+```md
 -## Context
 Why this step is required.
 
