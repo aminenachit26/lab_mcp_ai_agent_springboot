@@ -211,31 +211,6 @@ Each step in this lab **must have its own issue**.
 
 ---
 
-## ⚡ Automated Setup (One-click)
-
-After merging the bootstrap PR into `main`, run the **"Setup Lab"** GitHub Actions workflow once:
-
-1. Go to **Actions** → **"Setup Lab – Create Issues, Branches and PRs"**
-2. Click **Run workflow**
-
-The workflow will automatically:
-- Create 13 labels (one per step)
-- Create 12 GitHub Issues (one per step)
-- Create 12 step branches (chained: `step-1-bootstrap` ← `step-1.5-user-slice` ← … ← `step-12-kubernetes`)
-- Create 12 draft Pull Requests (each PR closes its corresponding issue)
-
-Once complete, merge the draft PRs **in order** (STEP 1 through STEP 12) to walk through the lab step by step.
-
-> 💡 The step-specific versions of `build.gradle` and `application.yml` are stored under `steps/`
-> so the workflow can create each branch at exactly the right state.
-
----
-
-## 📄 Standard Issue Template (MANDATORY)
-
-Each STEP issue **must follow this template**:
-
-```md
 -## Context
 Why this step is required.
 
