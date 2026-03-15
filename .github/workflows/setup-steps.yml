@@ -1,0 +1,760 @@
+name: "Setup Lab – Create Issues, Branches and PRs"
+
+# ──────────────────────────────────────────────────────────────
+# Run ONCE from the GitHub Actions UI after merging the main PR.
+# (Actions → "Setup Lab" → Run workflow)
+#
+# Creates one GitHub Issue + one step branch + one draft PR for
+# each of the 12 lab steps, chained as:
+#
+#  main ← step-1-bootstrap ← step-1.5-user-slice
+#       ← step-2-langchain4j-deps ← step-3-configuration
+#       ← step-4-connect-claude   ← step-5-mcp-http-client
+#       ← step-6-mcp-tool-bridge  ← step-7-agent-rest-api
+#       ← step-8-unit-tests       ← step-9-integration-tests
+#       ← step-10-dockerize       ← step-11-cicd
+#       ← step-12-kubernetes
+# ──────────────────────────────────────────────────────────────
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git user
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+
+      - name: Create labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          create_label() { gh label create "$1" --color "$2" --description "$3" --force; }
+          create_label "bootstrap"  "0075ca" "STEP 1 – Bootstrap Spring Boot project"
+          create_label "user-slice" "e4e669" "STEP 1.5 – User vertical slice"
+          create_label "langchain"  "d93f0b" "STEP 2 – LangChain4j dependencies"
+          create_label "config"     "bfd4f2" "STEP 3 – Configuration"
+          create_label "claude"     "c2e0c6" "STEP 4 – Connect to Claude"
+          create_label "mcp-client" "fef2c0" "STEP 5 – MCP HTTP Client"
+          create_label "mcp-tool"   "fef2c0" "STEP 6 – MCP Tool Bridge"
+          create_label "api"        "0e8a16" "STEP 7 – REST API endpoint"
+          create_label "unit-test"  "ee0701" "STEP 8 – Unit tests"
+          create_label "int-test"   "ee0701" "STEP 9 – Integration tests"
+          create_label "docker"     "1d76db" "STEP 10 – Dockerize"
+          create_label "cicd"       "5319e7" "STEP 11 – CI/CD"
+          create_label "kubernetes" "006b75" "STEP 12 – Kubernetes"
+
+      - name: Find base SHA
+        id: base
+        run: |
+          FIRST_CODE=$(git log main \
+            --oneline --diff-filter=A \
+            -- 'src/main/java/com/example/agent/Application.java' \
+            | tail -1 | awk '{print $1}')
+          if [ -n "$FIRST_CODE" ]; then
+            BASE_SHA=$(git rev-parse "${FIRST_CODE}^")
+          else
+            BASE_SHA=$(git log --oneline main | tail -1 | awk '{print $1}')
+          fi
+          echo "sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Base SHA: $BASE_SHA ($(git log -1 --format='%s' "$BASE_SHA"))"
+
+      - name: "STEP 1 – Bootstrap Spring Boot project"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          BRANCH:   step-1-bootstrap
+          PREV:     main
+        run: |
+          git checkout -b "$BRANCH" "$BASE_SHA"
+
+          git checkout main -- \
+            settings.gradle \
+            gradle.properties \
+            gradle/wrapper/gradle-wrapper.jar \
+            gradle/wrapper/gradle-wrapper.properties \
+            gradle/libs.versions.toml \
+            gradlew \
+            gradlew.bat \
+            .gitattributes \
+            .gitignore \
+            src/main/java/com/example/agent/Application.java
+
+          cp steps/step-1/build.gradle      build.gradle
+          mkdir -p src/main/resources
+          cp steps/step-1/application.yml   src/main/resources/application.yml
+
+          git add .
+          git commit -m "[STEP 1] Bootstrap Spring Boot project (Gradle 9.4, Java 21, Spring Web)"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Bootstrap the Spring Boot project skeleton using Gradle 9.4 and Java 21."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Create settings.gradle, build.gradle, Gradle wrapper"
+            echo "- [ ] Configure Java 21 toolchain in build.gradle"
+            echo "- [ ] Add Spring Web + Validation dependencies"
+            echo "- [ ] Create Application.java entry point"
+            echo "- [ ] Add minimal application.yml"
+            echo "- [ ] Verify ./gradlew build succeeds"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 1] Bootstrap Spring Boot project" \
+            --label "bootstrap" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- Gradle 9.4 wrapper + Java 21 toolchain"
+            echo "- spring-boot-starter-web + spring-boot-starter-validation"
+            echo "- Application.java + minimal application.yml"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 1] Bootstrap Spring Boot project" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 1.5 – User vertical slice"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-1.5-user-slice
+          PREV:   step-1-bootstrap
+        run: |
+          git checkout -b "$BRANCH" origin/step-1-bootstrap
+
+          git checkout main -- \
+            src/main/java/com/example/agent/domain/User.java \
+            src/main/java/com/example/agent/service/UserService.java \
+            src/main/java/com/example/agent/web/UserController.java \
+            src/test/java/com/example/agent/web/UserControllerIT.java \
+            src/test/resources/application.yml
+
+          git add .
+          git commit -m "[STEP 1.5] Add User vertical slice (domain, service, controller, integration test)"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Implement a complete User CRUD as a vertical slice to practise Spring Boot patterns."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Create User record (id, name, email)"
+            echo "- [ ] Create UserService (in-memory ConcurrentHashMap store)"
+            echo "- [ ] Create UserController (POST /api/users, GET /api/users/{id})"
+            echo "- [ ] Write UserControllerIT integration test"
+            echo "- [ ] Run ./gradlew test – all green"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 1.5] Add User vertical slice" \
+            --label "user-slice" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- User record (id, name, email)"
+            echo "- UserService with in-memory store"
+            echo "- UserController (POST + GET endpoints)"
+            echo "- UserControllerIT integration test"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 1.5] Add User vertical slice" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 2 – Add LangChain4j dependencies"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-2-langchain4j-deps
+          PREV:   step-1.5-user-slice
+        run: |
+          git checkout -b "$BRANCH" origin/step-1.5-user-slice
+
+          cp steps/step-2/build.gradle build.gradle
+
+          git add .
+          git commit -m "[STEP 2] Add LangChain4j BOM 0.36.2 + Anthropic + WebFlux dependencies"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Add all required dependencies for the AI agent layer."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Add LangChain4j BOM 0.36.2 to build.gradle"
+            echo "- [ ] Add langchain4j and langchain4j-anthropic dependencies"
+            echo "- [ ] Add spring-webflux + reactor-netty-http"
+            echo "- [ ] Add mockito-core + reactor-test for testing"
+            echo "- [ ] Verify ./gradlew build still succeeds"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 2] Add LangChain4j BOM + Anthropic + WebFlux dependencies" \
+            --label "langchain" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- LangChain4j BOM 0.36.2 + langchain4j + langchain4j-anthropic"
+            echo "- spring-webflux + reactor-netty-http"
+            echo "- mockito-core:5.12.0 + reactor-test"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 2] Add LangChain4j BOM + Anthropic + WebFlux dependencies" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 3 – Configure Anthropic, MCP, and GitHub coordinates"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-3-configuration
+          PREV:   step-2-langchain4j-deps
+        run: |
+          git checkout -b "$BRANCH" origin/step-2-langchain4j-deps
+
+          cp steps/step-3/application.yml src/main/resources/application.yml
+
+          git add .
+          git commit -m "[STEP 3] Configure Anthropic, MCP endpoint, and GitHub coordinates in application.yml"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Centralise all external configuration in application.yml with environment variable overrides."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Add anthropic.api-key, anthropic.model, anthropic.max-tokens"
+            echo "- [ ] Add mcp.base-url and mcp.path configuration"
+            echo "- [ ] Add github.owner and github.repo configuration"
+            echo "- [ ] All values support dollar-brace ENV_VAR:default overrides"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 3] Configure Anthropic, MCP endpoint, and GitHub coordinates" \
+            --label "config" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- anthropic.* configuration block"
+            echo "- mcp.* configuration block"
+            echo "- github.* configuration block"
+            echo "- All with ENV_VAR:default overrides"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 3] Configure Anthropic, MCP endpoint, and GitHub coordinates" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 4 – Connect LangChain4j to Claude"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-4-connect-claude
+          PREV:   step-3-configuration
+        run: |
+          git checkout -b "$BRANCH" origin/step-3-configuration
+
+          git checkout main -- \
+            src/main/java/com/example/agent/agent/BacklogAgent.java \
+            src/main/java/com/example/agent/config/LangChainConfig.java
+
+          git add .
+          git commit -m "[STEP 4] Connect LangChain4j to Claude (BacklogAgent @AiService + LangChainConfig)"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Wire up LangChain4j AiServices to talk to Claude via the Anthropic API."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Create BacklogAgent interface annotated with @AiService"
+            echo "- [ ] Add a system prompt instructing the agent to call the issue-creation tool"
+            echo "- [ ] Create LangChainConfig Spring @Configuration"
+            echo "  - Build AnthropicChatModel from application.yml properties"
+            echo "  - Wire all AgentTool beans into AiServices.builder()"
+            echo "- [ ] Verify the Spring context loads without errors"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 4] Connect LangChain4j to Claude (BacklogAgent + LangChainConfig)" \
+            --label "claude" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- BacklogAgent @AiService interface with system prompt"
+            echo "- LangChainConfig wiring AnthropicChatModel + AiServices"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 4] Connect LangChain4j to Claude (BacklogAgent + LangChainConfig)" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 5 – Implement McpHttpClient"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-5-mcp-http-client
+          PREV:   step-4-connect-claude
+        run: |
+          git checkout -b "$BRANCH" origin/step-4-connect-claude
+
+          git checkout main -- \
+            src/main/java/com/example/agent/mcp/McpHttpClient.java
+
+          git add .
+          git commit -m "[STEP 5] Implement McpHttpClient (JSON-RPC 2.0 over HTTP via WebFlux WebClient)"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Implement the reactive HTTP client that talks to the MCP HTTP Wrapper via JSON-RPC 2.0."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Create McpHttpClient Spring @Component"
+            echo "- [ ] Use Spring WebClient for reactive HTTP calls"
+            echo "- [ ] Implement callTool(name, params) returning Mono<Object>"
+            echo "- [ ] Implement listTools() returning Mono<Object>"
+            echo "- [ ] JSON-RPC 2.0 format: {jsonrpc, method, params, id}"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 5] Implement McpHttpClient (JSON-RPC 2.0 over HTTP)" \
+            --label "mcp-client" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- McpHttpClient Spring component with WebFlux WebClient"
+            echo "- JSON-RPC 2.0 callTool() and listTools() methods"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 5] Implement McpHttpClient (JSON-RPC 2.0 over HTTP)" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 6 – Bridge MCP tools with LangChain4j"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-6-mcp-tool-bridge
+          PREV:   step-5-mcp-http-client
+        run: |
+          git checkout -b "$BRANCH" origin/step-5-mcp-http-client
+
+          git checkout main -- \
+            src/main/java/com/example/agent/tools/AgentTool.java \
+            src/main/java/com/example/agent/tools/GitHubMcpTools.java
+
+          git add .
+          git commit -m "[STEP 6] Bridge MCP tools with LangChain4j (AgentTool interface + GitHubMcpTools @Tool)"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Expose MCP tools as LangChain4j @Tool methods so that Claude can call them."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Create AgentTool marker interface"
+            echo "- [ ] Create GitHubMcpTools @Component implementing AgentTool"
+            echo "- [ ] Annotate createIssue(title, body) with @Tool and @P"
+            echo "- [ ] Delegate to McpHttpClient.callTool(create_issue, ...)"
+            echo "- [ ] Inject github.owner and github.repo from properties"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 6] Bridge MCP tools with LangChain4j (@Tool + AgentTool)" \
+            --label "mcp-tool" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- AgentTool marker interface"
+            echo "- GitHubMcpTools with @Tool createIssue(title, body)"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 6] Bridge MCP tools with LangChain4j (@Tool + AgentTool)" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 7 – Expose AI agent via REST API"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-7-agent-rest-api
+          PREV:   step-6-mcp-tool-bridge
+        run: |
+          git checkout -b "$BRANCH" origin/step-6-mcp-tool-bridge
+
+          git checkout main -- \
+            src/main/java/com/example/agent/service/AgentService.java \
+            src/main/java/com/example/agent/web/AgentController.java
+
+          git add .
+          git commit -m "[STEP 7] Expose AI agent via REST API (AgentService + POST /api/run endpoint)"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Expose the AI agent as a REST endpoint that accepts a natural language prompt."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Create AgentService that delegates to BacklogAgent.handle(prompt)"
+            echo "- [ ] Create AgentController with POST /api/run"
+            echo "- [ ] Accept JSON body {prompt: ...}"
+            echo "- [ ] Validate that prompt is not null/blank (400 Bad Request otherwise)"
+            echo "- [ ] Test manually with curl"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 7] Expose AI agent via REST API (POST /api/run)" \
+            --label "api" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- AgentService delegating to BacklogAgent"
+            echo "- AgentController with POST /api/run and prompt validation"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 7] Expose AI agent via REST API (POST /api/run)" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 8 – Unit tests for MCP tool bridge"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-8-unit-tests
+          PREV:   step-7-agent-rest-api
+        run: |
+          git checkout -b "$BRANCH" origin/step-7-agent-rest-api
+
+          git checkout main -- \
+            src/test/java/com/example/agent/tools/GitHubMcpToolsTest.java
+
+          git add .
+          git commit -m "[STEP 8] Add unit tests for MCP tool bridge (GitHubMcpToolsTest with Mockito)"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Unit-test GitHubMcpTools by mocking McpHttpClient."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Create GitHubMcpToolsTest with Mockito (no Spring context)"
+            echo "- [ ] Mock McpHttpClient"
+            echo "- [ ] Verify createIssue() calls callTool(create_issue, ...)"
+            echo "- [ ] Assert the result contains 'Issue created successfully'"
+            echo "- [ ] Run ./gradlew test – all green"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 8] Add unit tests for MCP tool bridge (GitHubMcpToolsTest)" \
+            --label "unit-test" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- GitHubMcpToolsTest with Mockito (mocks McpHttpClient)"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 8] Add unit tests for MCP tool bridge" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 9 – Integration tests for AgentController"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-9-integration-tests
+          PREV:   step-8-unit-tests
+        run: |
+          git checkout -b "$BRANCH" origin/step-8-unit-tests
+
+          git checkout main -- \
+            src/test/java/com/example/agent/web/AgentControllerIT.java
+
+          git add .
+          git commit -m "[STEP 9] Add integration tests for AgentController (AgentControllerIT with MockitoBean)"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "End-to-end integration test for POST /api/run that does NOT call Anthropic in CI."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Create AgentControllerIT with @SpringBootTest(RANDOM_PORT)"
+            echo "- [ ] Mock BacklogAgent and McpHttpClient with @MockitoBean"
+            echo "- [ ] Test happy path: 200 OK"
+            echo "- [ ] Test validation: 400 Bad Request when prompt is blank"
+            echo "- [ ] Run ./gradlew test – all green"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 9] Add integration tests for AgentController (AgentControllerIT)" \
+            --label "int-test" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- AgentControllerIT mocking BacklogAgent + McpHttpClient (no real Anthropic calls)"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 9] Add integration tests for AgentController" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 10 – Dockerize the agent"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-10-dockerize
+          PREV:   step-9-integration-tests
+        run: |
+          git checkout -b "$BRANCH" origin/step-9-integration-tests
+
+          git checkout main -- Dockerfile
+
+          git add .
+          git commit -m "[STEP 10] Dockerize the agent (multi-stage build: eclipse-temurin:21-jdk to jre)"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Package the Spring Boot agent as a Docker image using a multi-stage build."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Create Dockerfile with two stages:"
+            echo "  - Builder: eclipse-temurin:21-jdk + Gradle build"
+            echo "  - Runtime: eclipse-temurin:21-jre copying the JAR"
+            echo "- [ ] Expose port 8080"
+            echo "- [ ] Test: docker build -t ai-agent . && docker run -p 8080:8080 ai-agent"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 10] Dockerize the AI agent (multi-stage Dockerfile)" \
+            --label "docker" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- Multi-stage Dockerfile (eclipse-temurin:21-jdk build to jre runtime)"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 10] Dockerize the AI agent (multi-stage Dockerfile)" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 11 – Setup CI/CD with GitHub Actions"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-11-cicd
+          PREV:   step-10-dockerize
+        run: |
+          git checkout -b "$BRANCH" origin/step-10-dockerize
+
+          git checkout main -- \
+            .github/workflows/ci.yml \
+            .github/workflows/docker-publish.yml
+
+          git add .
+          git commit -m "[STEP 11] Setup CI/CD with GitHub Actions (ci.yml + docker-publish.yml)"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Automate build, test, and Docker publish via GitHub Actions."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Create .github/workflows/ci.yml: build + test on every push/PR"
+            echo "- [ ] Set permissions: contents: read (least-privilege)"
+            echo "- [ ] Create .github/workflows/docker-publish.yml: push image to GHCR on main"
+            echo "- [ ] Set permissions: packages: write for the Docker publish workflow"
+            echo "- [ ] Verify CI pipeline passes on a test push"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 11] Setup CI/CD with GitHub Actions (build + Docker publish)" \
+            --label "cicd" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- ci.yml: build + test on all pushes"
+            echo "- docker-publish.yml: publish to GHCR on main"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 11] Setup CI/CD with GitHub Actions" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "STEP 12 – Add Kubernetes manifests"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: step-12-kubernetes
+          PREV:   step-11-cicd
+        run: |
+          git checkout -b "$BRANCH" origin/step-11-cicd
+
+          git checkout main -- \
+            k8s/github-mcp.yaml \
+            k8s/ai-agent.yaml
+
+          git add .
+          git commit -m "[STEP 12] Add Kubernetes manifests for Minikube deployment (github-mcp + ai-agent)"
+          git push origin "$BRANCH"
+
+          {
+            echo "## Goal"
+            echo "Deploy both the AI agent and the GitHub MCP server to a local Minikube cluster."
+            echo ""
+            echo "## Tasks"
+            echo "- [ ] Create k8s/github-mcp.yaml: Deployment + Service for MCP HTTP wrapper"
+            echo "- [ ] Create k8s/ai-agent.yaml: Deployment + Service for Spring Boot agent"
+            echo "- [ ] Both pods read credentials from an agent-secrets Kubernetes Secret"
+            echo "- [ ] Apply: kubectl apply -f k8s/"
+            echo "- [ ] Verify: kubectl get pods"
+            echo ""
+            echo "## Branch"
+            echo "\`$BRANCH\`"
+          } > /tmp/issue-body.txt
+          ISSUE=$(gh issue create \
+            --title "[STEP 12] Add Kubernetes manifests for Minikube deployment" \
+            --label "kubernetes" \
+            --body-file /tmp/issue-body.txt \
+            --json number --jq '.number')
+
+          {
+            echo "Closes #${ISSUE}"
+            echo ""
+            echo "## Changes"
+            echo "- k8s/github-mcp.yaml: MCP HTTP wrapper Deployment + Service"
+            echo "- k8s/ai-agent.yaml: AI agent Deployment + Service"
+          } > /tmp/pr-body.txt
+          gh pr create \
+            --title "[STEP 12] Add Kubernetes manifests for Minikube deployment" \
+            --base "$PREV" --head "$BRANCH" --draft \
+            --body-file /tmp/pr-body.txt
+
+          git checkout main
+
+      - name: "Print summary"
+        run: |
+          {
+            printf '%s\n' '## Lab Setup Complete'
+            printf '%s\n' ''
+            printf '%s\n' 'Created **12 GitHub Issues**, **12 step branches**, and **12 draft PRs**.'
+            printf '%s\n' ''
+            printf '%s\n' '| Step | Branch | PR targets |'
+            printf '%s\n' '|------|--------|-----------|'
+            printf '%s\n' '| STEP 1    | `step-1-bootstrap`           | main                    |'
+            printf '%s\n' '| STEP 1.5  | `step-1.5-user-slice`        | step-1-bootstrap        |'
+            printf '%s\n' '| STEP 2    | `step-2-langchain4j-deps`    | step-1.5-user-slice     |'
+            printf '%s\n' '| STEP 3    | `step-3-configuration`       | step-2-langchain4j-deps |'
+            printf '%s\n' '| STEP 4    | `step-4-connect-claude`      | step-3-configuration    |'
+            printf '%s\n' '| STEP 5    | `step-5-mcp-http-client`     | step-4-connect-claude   |'
+            printf '%s\n' '| STEP 6    | `step-6-mcp-tool-bridge`     | step-5-mcp-http-client  |'
+            printf '%s\n' '| STEP 7    | `step-7-agent-rest-api`      | step-6-mcp-tool-bridge  |'
+            printf '%s\n' '| STEP 8    | `step-8-unit-tests`          | step-7-agent-rest-api   |'
+            printf '%s\n' '| STEP 9    | `step-9-integration-tests`   | step-8-unit-tests       |'
+            printf '%s\n' '| STEP 10   | `step-10-dockerize`          | step-9-integration-tests|'
+            printf '%s\n' '| STEP 11   | `step-11-cicd`               | step-10-dockerize       |'
+            printf '%s\n' '| STEP 12   | `step-12-kubernetes`         | step-11-cicd            |'
+            printf '%s\n' ''
+            printf '%s\n' 'Merge the draft PRs **in order** (STEP 1 through STEP 12) to build the project step by step.'
+          } >> "$GITHUB_STEP_SUMMARY"
