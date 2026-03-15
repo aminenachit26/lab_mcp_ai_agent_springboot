@@ -1,0 +1,13 @@
+github:
+  owner: test-owner
+  repo: test-repo
+
+anthropic:
+  api-key: test-api-key
+  model: claude-3-5-sonnet-20241022
+  max-tokens: 800
+  timeout-seconds: 60
+
+mcp:
+  base-url: http://localhost:3333
+  path: /mcp

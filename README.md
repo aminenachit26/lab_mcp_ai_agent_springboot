@@ -209,7 +209,6 @@ Each step in this lab **must have its own issue**.
 | STEP 11  | `[STEP 11] Setup CI/CD with GitHub Actions`         |
 
 ---
-
 ## 📄 Standard Issue Template (MANDATORY)
 
 Each STEP issue **must follow this template**:
