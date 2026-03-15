@@ -1,20 +1,4 @@
 name: "Setup Lab – Create Issues, Branches and PRs"
-
-# ──────────────────────────────────────────────────────────────
-# Run ONCE from the GitHub Actions UI after merging the main PR.
-# (Actions → "Setup Lab" → Run workflow)
-#
-# Creates one GitHub Issue + one step branch + one draft PR for
-# each of the 12 lab steps, chained as:
-#
-#  main ← step-1-bootstrap ← step-1.5-user-slice
-#       ← step-2-langchain4j-deps ← step-3-configuration
-#       ← step-4-connect-claude   ← step-5-mcp-http-client
-#       ← step-6-mcp-tool-bridge  ← step-7-agent-rest-api
-#       ← step-8-unit-tests       ← step-9-integration-tests
-#       ← step-10-dockerize       ← step-11-cicd
-#       ← step-12-kubernetes
-# ──────────────────────────────────────────────────────────────
 on:
   workflow_dispatch:
 
