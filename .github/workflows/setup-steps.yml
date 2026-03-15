@@ -77,9 +77,9 @@ jobs:
             .gitignore \
             src/main/java/com/example/agent/Application.java
 
-          cp steps/step-1/build.gradle      build.gradle
+          git show main:steps/step-1/build.gradle > build.gradle
           mkdir -p src/main/resources
-          cp steps/step-1/application.yml   src/main/resources/application.yml
+          git show main:steps/step-1/application.yml > src/main/resources/application.yml
 
           git add .
           git commit -m "[STEP 1] Bootstrap Spring Boot project (Gradle 9.4, Java 21, Spring Web)"
@@ -184,7 +184,7 @@ jobs:
         run: |
           git checkout -b "$BRANCH" origin/step-1.5-user-slice
 
-          cp steps/step-2/build.gradle build.gradle
+          git show main:steps/step-2/build.gradle > build.gradle
 
           git add .
           git commit -m "[STEP 2] Add LangChain4j BOM 0.36.2 + Anthropic + WebFlux dependencies"
@@ -233,7 +233,7 @@ jobs:
         run: |
           git checkout -b "$BRANCH" origin/step-2-langchain4j-deps
 
-          cp steps/step-3/application.yml src/main/resources/application.yml
+          git show main:steps/step-3/application.yml > src/main/resources/application.yml
 
           git add .
           git commit -m "[STEP 3] Configure Anthropic, MCP endpoint, and GitHub coordinates in application.yml"
